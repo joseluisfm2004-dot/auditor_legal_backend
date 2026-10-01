@@ -1,60 +1,84 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from app.db.database import get_db
-from app.schemas.usuarios import UsuarioCreate, UsuarioResponse
-from app.core.security import get_password_hash
-
-router = APIRouter()
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.database import Base
 
 
-@router.post("/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-async def create_usuario(user: UsuarioCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Verificar si el correo electrónico ya existe
-    result = await db.execute(select(Usuario).where(Usuario.email == user.email))
-    if result.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado."
-        )
+class Usuario(Base):
+    __tablename__ = "usuarios"
 
-    # 2. Generar el hash de la contraseña
-    hashed_pwd = get_password_hash(user.password)
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), nullable=False)
+    email = Column(String(150), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    rol = Column(String(50), default="auditor")
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
-    # 3. Mapear al modelo usando la columna 'password_hash'
-    nuevo_usuario = Usuario(
-        nombre=user.nombre,
-        email=user.email,
-        password_hash=hashed_pwd,
-        rol=user.rol
-    )
-
-    # 4. Guardar en SQL Server
-    db.add(nuevo_usuario)
-    await db.commit()
-    await db.refresh(nuevo_usuario)
-
-    return nuevo_usuario
+    # Relaciones
+    contratos = relationship("Contrato", back_populates="usuario")
 
 
-@router.get("/", response_model=List[UsuarioResponse])
-async def list_usuarios(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """Obtiene el listado de usuarios registrados."""
-    result = await db.execute(select(Usuario).offset(skip).limit(limit))
-    return result.scalars().all()
+class Contrato(Base):
+    __tablename__ = "contratos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    titulo = Column(String(200), nullable=False)
+    nombre_archivo = Column(String(255), nullable=False)
+    ruta_archivo = Column(String(500), nullable=False)
+    estado = Column(String(50), default="pendiente")  # pendiente, procesando, auditado, error
+    fecha_subida = Column(DateTime, default=datetime.utcnow)
+    
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+
+    # Relaciones
+    usuario = relationship("Usuario", back_populates="contratos")
+    clausulas = relationship("Clausula", back_populates="contrato", cascade="all, delete-orphan")
+    auditorias = relationship("Auditoria", back_populates="contrato", cascade="all, delete-orphan")
 
 
-@router.get("/{usuario_id}", response_model=UsuarioResponse)
-async def get_usuario(usuario_id: int, db: AsyncSession = Depends(get_db)):
-    """Obtiene la información de un usuario específico por su ID."""
-    result = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
-    usuario = result.scalars().first()
+class Clausula(Base):
+    __tablename__ = "clausulas"
 
-    if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado."
-        )
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
+    numero = Column(String(50), nullable=True)  # Ej: "Primera", "1.1", "Cláusula Quinta"
+    titulo = Column(String(250), nullable=True)  # Ej: "Objeto del Contrato", "Confidencialidad"
+    texto = Column(Text, nullable=False)
+    orden = Column(Integer, default=0)
 
-    return usuario
+    # Relaciones
+    contrato = relationship("Contrato", back_populates="clausulas")
+    hallazgos = relationship("Hallazgo", back_populates="clausula")
+
+
+class Auditoria(Base):
+    __tablename__ = "auditorias"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
+    fecha_auditoria = Column(DateTime, default=datetime.utcnow)
+    puntaje_riesgo = Column(Float, default=0.0)  # De 0.0 (Sin riesgo) a 10.0 (Riesgo Crítico)
+    resumen_ejecutivo = Column(Text, nullable=True)
+    estado = Column(String(50), default="en_proceso")  # en_proceso, completada, fallida
+
+    # Relaciones
+    contrato = relationship("Contrato", back_populates="auditorias")
+    hallazgos = relationship("Hallazgo", back_populates="auditoria", cascade="all, delete-orphan")
+
+
+class Hallazgo(Base):
+    __tablename__ = "hallazgos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    auditoria_id = Column(Integer, ForeignKey("auditorias.id"), nullable=False)
+    clausula_id = Column(Integer, ForeignKey("clausulas.id"), nullable=True)
+    
+    nivel_riesgo = Column(String(50), nullable=False)  # bajo, medio, alto, critico
+    tipo = Column(String(100), nullable=False)  # clausula_abusiva, ambiguedad, omision, penalizacion
+    descripcion = Column(Text, nullable=False)
+    sugerencia_mejora = Column(Text, nullable=True)
+
+    # Relaciones
+    auditoria = relationship("Auditoria", back_populates="hallazgos")
+    clausula = relationship("Clausula", back_populates="hallazgos")
