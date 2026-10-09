@@ -26,11 +26,7 @@ elif os.getenv("OPENAI_API_KEY"):
 # Función Principal de Análisis
 # ----------------------------------------------------------------------
 async def analizar_clausula_con_ia(numero: str, titulo: str, texto: str) -> Dict[str, Any]:
-    """
-    Analiza una cláusula individual e identifica riesgos o hallazgos jurídicos
-    utilizando un modelo LLM con salida estructurada JSON, o mediante reglas
-    heurísticas como respaldo.
-    """
+  
     if client:
         try:
             prompt_sistema = (
@@ -174,4 +170,46 @@ async def generar_resumen_ejecutivo(hallazgos_totales: List[Dict[str, Any]], pun
         nivel = "BAJO"
         rec = "El documento presenta un perfil de riesgo aceptable con observaciones mínimas."
 
-    return f"Auditoría completada. Nivel de riesgo general: {nivel} (Puntaje: {puntaje_riesgo:.1f}/100). Total de hallazgos registrados: {num_hallazgos}. {rec}"
+    return f"Auditoría completada. Nivel de riesgo general: {nivel} (Puntaje: {puntaje_riesgo:.1f}/100). Total de hallazgos registrados: {num_hallazgos}. {rec}" 
+
+# ----------------------------------------------------------------------
+# Función de Asistente Conversacional RAG (Chat sobre el Contrato)
+# ----------------------------------------------------------------------
+async def consultar_contrato_rag(pregunta: str, contexto_clausulas: str) -> tuple[str, list[str]]:
+    """
+    Procesa consultas del usuario utilizando las cláusulas del contrato como contexto exclusivo.
+    """
+    if not client:
+        return "El servicio de Inteligencia Artificial no está configurado actualmente.", []
+
+    prompt_sistema = (
+        "Eres un asistente legal experto de PluriOne S.A. de C.V. "
+        "Tu tarea es responder preguntas sobre el contrato proporcionado utilizando ÚNICAMENTE "
+        "el texto de las cláusulas adjuntas en el contexto. "
+        "Si la respuesta no se encuentra en el texto, indícalo claramente. "
+        "No inventes información y mantén un tono corporativo y profesional."
+    )
+    
+    prompt_usuario = f"CONTEXTO DE LAS CLÁUSULAS:\n{contexto_clausulas}\n\nPREGUNTA DEL USUARIO: {pregunta}"
+
+    try:
+        response = await client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": prompt_sistema},
+                {"role": "user", "content": prompt_usuario}
+            ],
+            temperature=0.1,
+            max_tokens=800
+        )
+        
+        respuesta_ia = response.choices[0].message.content.strip()
+        
+        # Lista opcional de referencias (puedes poblarla dinámicamente si lo deseas)
+        clausulas_citadas = []
+        
+        return respuesta_ia, clausulas_citadas
+
+    except Exception as e:
+        print(f"[AI Chat Warning] Error al procesar el chat RAG: {e}")
+        return "Ocurrió un error al procesar tu consulta con el asistente de IA.", []

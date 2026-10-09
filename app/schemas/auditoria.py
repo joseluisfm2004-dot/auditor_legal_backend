@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
-
 class HallazgoResponse(BaseModel):
     id: int
     clausula_id: Optional[int] = None
@@ -34,6 +33,18 @@ class AuditoriaResponse(BaseModel):
     resumen_ejecutivo: Optional[str] = None
     estado: str
     hallazgos: List[HallazgoResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ChatQuerySchema(BaseModel):
+    pregunta: str
+
+
+class ChatResponseSchema(BaseModel):
+    respuesta: str
+    clausulas_citadas: List[str] = []
 
     class Config:
         from_attributes = True

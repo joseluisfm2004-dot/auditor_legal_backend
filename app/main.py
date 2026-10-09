@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
@@ -17,7 +18,6 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # Evento de apagado (si se requiere liberar recursos)
 
 
 app = FastAPI(
@@ -25,6 +25,14 @@ app = FastAPI(
     description="API RESTful para la gestión y auditoría jurídica automatizada con IA.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"], # Puerto por defecto de Vite
+    allow_credentials=True,
+    allow_methods=["*"], # Permite GET, POST, PUT, DELETE, etc.
+    allow_headers=["*"], # Permite todos los headers (como Authorization para el token JWT)
 )
 
 # Registro de Routers con prefijos y etiquetas para Swagger
