@@ -15,8 +15,9 @@ class Usuario(Base):
     activo = Column(Boolean, default=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
-    # Relaciones
+    
     contratos = relationship("Contrato", back_populates="usuario")
+    sesiones_chat = relationship("SesionChat", back_populates="usuario", cascade="all, delete-orphan")
 
 
 class Contrato(Base):
@@ -26,15 +27,16 @@ class Contrato(Base):
     titulo = Column(String(200), nullable=False)
     nombre_archivo = Column(String(255), nullable=False)
     ruta_archivo = Column(String(500), nullable=False)
-    estado = Column(String(50), default="pendiente")  # pendiente, procesando, auditado, error
+    estado = Column(String(50), default="pendiente")  
     fecha_subida = Column(DateTime, default=datetime.utcnow)
     
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
 
-    # Relaciones
+   
     usuario = relationship("Usuario", back_populates="contratos")
     clausulas = relationship("Clausula", back_populates="contrato", cascade="all, delete-orphan")
     auditorias = relationship("Auditoria", back_populates="contrato", cascade="all, delete-orphan")
+    sesiones_chat = relationship("SesionChat", back_populates="contrato", cascade="all, delete-orphan")
 
 
 class Clausula(Base):
@@ -42,12 +44,12 @@ class Clausula(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
-    numero = Column(String(50), nullable=True)  # Ej: "Primera", "1.1", "Cláusula Quinta"
-    titulo = Column(String(250), nullable=True)  # Ej: "Objeto del Contrato", "Confidencialidad"
+    numero = Column(String(50), nullable=True)  
+    titulo = Column(String(250), nullable=True)  
     texto = Column(Text, nullable=False)
     orden = Column(Integer, default=0)
 
-    # Relaciones
+    
     contrato = relationship("Contrato", back_populates="clausulas")
     hallazgos = relationship("Hallazgo", back_populates="clausula")
 
@@ -58,11 +60,11 @@ class Auditoria(Base):
     id = Column(Integer, primary_key=True, index=True)
     contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
     fecha_auditoria = Column(DateTime, default=datetime.utcnow)
-    puntaje_riesgo = Column(Float, default=0.0)  # De 0.0 (Sin riesgo) a 10.0 (Riesgo Crítico)
+    puntaje_riesgo = Column(Float, default=0.0)  
     resumen_ejecutivo = Column(Text, nullable=True)
-    estado = Column(String(50), default="en_proceso")  # en_proceso, completada, fallida
+    estado = Column(String(50), default="en_proceso") 
 
-    # Relaciones
+  
     contrato = relationship("Contrato", back_populates="auditorias")
     hallazgos = relationship("Hallazgo", back_populates="auditoria", cascade="all, delete-orphan")
 
@@ -74,11 +76,37 @@ class Hallazgo(Base):
     auditoria_id = Column(Integer, ForeignKey("auditorias.id"), nullable=False)
     clausula_id = Column(Integer, ForeignKey("clausulas.id"), nullable=True)
     
-    nivel_riesgo = Column(String(50), nullable=False)  # bajo, medio, alto, critico
-    tipo = Column(String(100), nullable=False)  # clausula_abusiva, ambiguedad, omision, penalizacion
+    nivel_riesgo = Column(String(50), nullable=False) 
+    tipo = Column(String(100), nullable=False) 
     descripcion = Column(Text, nullable=False)
     sugerencia_mejora = Column(Text, nullable=True)
 
-    # Relaciones
+  
     auditoria = relationship("Auditoria", back_populates="hallazgos")
     clausula = relationship("Clausula", back_populates="hallazgos")
+
+
+class SesionChat(Base):
+    __tablename__ = "sesiones_chat"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    fecha_inicio = Column(DateTime, default=datetime.utcnow)
+
+    contrato = relationship("Contrato", back_populates="sesiones_chat")
+    usuario = relationship("Usuario", back_populates="sesiones_chat")
+    mensajes = relationship("MensajeChat", back_populates="sesion", cascade="all, delete-orphan")
+
+
+class MensajeChat(Base):
+    __tablename__ = "mensajes_chat"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sesion_id = Column(Integer, ForeignKey("sesiones_chat.id"), nullable=False)
+    rol_emisor = Column(String(50), nullable=False)  # Esperado: 'user' o 'ia'
+    contenido = Column(Text, nullable=False)
+    fecha_envio = Column(DateTime, default=datetime.utcnow)
+
+ 
+    sesion = relationship("SesionChat", back_populates="mensajes")

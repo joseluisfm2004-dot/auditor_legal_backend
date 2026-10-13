@@ -4,18 +4,21 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload 
+
 from app.services.ai_auditor import analizar_clausula_con_ia, generar_resumen_ejecutivo, consultar_contrato_rag
 from app.db.database import get_db
 import app.models.models as db_models
 from app.schemas.contratos import ContratoResponse
 from app.schemas.auditoria import ClausulaResponse, ChatQuerySchema, ChatResponseSchema
+from app.schemas.chat import SesionChatResponse
 from app.core.deps import get_current_user
 from app.services.extractor import extraer_texto_documento
 from app.services.parser import segmentar_texto_en_clausulas
 
 router = APIRouter()
 
-# Carpeta donde se guardarán los archivos en el servidor
+
 UPLOAD_DIR = "uploads/contratos"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -29,7 +32,7 @@ async def upload_contrato(
 ):
     """Sube un documento de contrato (PDF/Word), lo almacena localmente y crea el registro en la BD."""
     
-    # 1. Validar extensión permitida
+   
     extensiones_permitidas = [".pdf", ".docx", ".doc"]
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in extensiones_permitidas:
@@ -38,11 +41,11 @@ async def upload_contrato(
             detail=f"Formato de archivo no permitido. Formatos válidos: {', '.join(extensiones_permitidas)}"
         )
 
-    # 2. Definir ruta única de almacenamiento
+  
     nombre_guardado = f"user_{current_user.id}_{int(os.path.getmtime('.'))}_{file.filename}"
     file_path = os.path.join(UPLOAD_DIR, nombre_guardado)
 
-    # 3. Guardar el archivo físicamente en el disco
+    
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -52,7 +55,7 @@ async def upload_contrato(
             detail=f"Error al guardar el archivo en el servidor: {str(e)}"
         )
 
-    # 4. Crear el registro en SQL Server
+  
     nuevo_contrato = db_models.Contrato(
         titulo=titulo,
         nombre_archivo=file.filename,
@@ -259,7 +262,36 @@ async def auditar_contrato(
         "hallazgos": hallazgos_totales
     }
 
+# ==========================================
+# NUEVO: Endpoint para obtener el historial
+# ==========================================
+@router.get("/{contrato_id}/chat/historial", response_model=SesionChatResponse)
+async def obtener_historial_chat(
+    contrato_id: int, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: db_models.Usuario = Depends(get_current_user)
+):
+    """Obtiene el historial de chat de un contrato guardado en SQL Server."""
+    # Usamos selectinload para traer los mensajes asociados a la sesión asíncronamente
+    result = await db.execute(
+        select(db_models.SesionChat)
+        .options(selectinload(db_models.SesionChat.mensajes))
+        .where(
+            db_models.SesionChat.contrato_id == contrato_id,
+            db_models.SesionChat.usuario_id == current_user.id
+        )
+    )
+    sesion = result.scalars().first()
 
+    if not sesion:
+        # Si no existe, devolvemos una estructura vacía para que el Frontend no falle
+        return {"id": 0, "contrato_id": contrato_id, "mensajes": []}
+    
+    return sesion
+
+# ==========================================
+# ACTUALIZADO: Endpoint para chatear y guardar historial
+# ==========================================
 @router.post("/{contrato_id}/chat", response_model=ChatResponseSchema)
 async def chat_con_contrato(
     contrato_id: int,
@@ -267,7 +299,7 @@ async def chat_con_contrato(
     db: AsyncSession = Depends(get_db),
     current_user: db_models.Usuario = Depends(get_current_user)
 ):
-    """Endpoint de interacción conversacional RAG para consultar dudas específicas sobre el contrato."""
+    """Endpoint de interacción conversacional RAG que guarda historial."""
     
     # 1. Validar propiedad y existencia del contrato
     result = await db.execute(
@@ -298,14 +330,51 @@ async def chat_con_contrato(
             detail="El contrato debe ser segmentado antes de iniciar el asistente conversacional."
         )
 
-    # 3. Construir el contexto unificado de texto
+    # --- INICIO LÓGICA DE HISTORIAL ---
+    # 3. Buscar si ya existe una sesión de chat, sino crearla
+    result_sesion = await db.execute(
+        select(db_models.SesionChat).where(
+            db_models.SesionChat.contrato_id == contrato_id,
+            db_models.SesionChat.usuario_id == current_user.id
+        )
+    )
+    sesion = result_sesion.scalars().first()
+
+    if not sesion:
+        sesion = db_models.SesionChat(contrato_id=contrato_id, usuario_id=current_user.id)
+        db.add(sesion)
+        await db.commit()
+        await db.refresh(sesion)
+
+    # 4. Guardar la pregunta del usuario
+    mensaje_usuario = db_models.MensajeChat(
+        sesion_id=sesion.id,
+        rol_emisor="user",
+        contenido=payload.pregunta
+    )
+    db.add(mensaje_usuario)
+    await db.commit()
+    # --- FIN LÓGICA DE HISTORIAL ---
+
+    # 5. Construir el contexto unificado de texto (Corregido el error de sintaxis)
     contexto_texto = "\n\n".join([f"[Cláusula {c.numero} - {c.titulo}]: {c.texto}" for c in clausulas])
 
-    # 4. Invocar el servicio de IA con patrón RAG
+    # 6. Invocar el servicio de IA con patrón RAG
     respuesta_ia, referencias = await consultar_contrato_rag(
         pregunta=payload.pregunta,
         contexto_clausulas=contexto_texto
     )
+
+    # --- INICIO LÓGICA DE HISTORIAL ---
+    # 7. Guardar la respuesta de la IA
+    mensaje_ia = db_models.MensajeChat(
+        sesion_id=sesion.id,
+        rol_emisor="ia",
+        contenido=respuesta_ia
+    )
+    db.add(mensaje_ia)
+    await db.commit()
+    # --- FIN LÓGICA DE HISTORIAL ---
 
     return ChatResponseSchema(
         respuesta=respuesta_ia,
