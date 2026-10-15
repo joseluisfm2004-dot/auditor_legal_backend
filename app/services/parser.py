@@ -1,13 +1,12 @@
 import re
 from typing import List, Dict
 
-
 def segmentar_texto_en_clausulas(texto: str) -> List[Dict[str, str]]:
     """Toma el texto completo de un contrato y lo divide en cláusulas individuales."""
     if not texto:
         return []
 
-    patron_clausula = r'(?i)(?=(?:^|\n)\s*(?:CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?))'
+    patron_clausula = r'(?i)(?=(?:^|\n)\s*(?:CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?|\d+\.\s+[A-ZÁÉÍÓÚ]))'
 
     bloques = re.split(patron_clausula, texto)
     clausulas_procesadas = []
@@ -25,18 +24,22 @@ def segmentar_texto_en_clausulas(texto: str) -> List[Dict[str, str]]:
         titulo = None
 
         coincidencia_num = re.search(
-            r'(?i)(CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?)',
+            r'(?i)(CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?|\d+\.\s*[A-ZÁÉÍÓÚ][^\n\.]*)',
             primera_linea
         )
 
         if coincidencia_num:
-            numero = coincidencia_num.group(0).upper()
+            numero_bruto = coincidencia_num.group(0).strip()
+            
+            match_exacto = re.search(r'(\d+|[IVX]+|PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|OCTAVA|NOVENA|DÉCIMA)', numero_bruto, re.IGNORECASE)
+            
+            numero = match_exacto.group(0).upper() if match_exacto else f"Cláusula {orden}"
             titulo = primera_linea
-        elif len(primera_linea) < 80:
+        elif len(primera_linea) < 100:
             titulo = primera_linea
 
         clausulas_procesadas.append({
-            "numero": numero or f"Sección {orden}",
+            "numero": str(numero) or f"Sección {orden}",
             "titulo": titulo or f"Cláusula {orden}",
             "texto": bloque_limpio,
             "orden": orden
