@@ -2,12 +2,10 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import jwt
 
-# Configuraciones de JWT (Idealmente irán en un archivo .env más adelante)
 SECRET_KEY = "clave_secreta_provisional_auditor" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Configuración del contexto criptográfico
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:

@@ -20,7 +20,6 @@ async def procesar_auditoria_background(auditoria_id: int, contrato_id: int):
     """Procesa el análisis de IA de manera asíncrona usando su propia sesión de BD."""
     async with AsyncSessionLocal() as db: # Sesión independiente para el background
         try:
-            # 1. Recuperar contrato y cláusulas
             result_contrato = await db.execute(select(db_models.Contrato).where(db_models.Contrato.id == contrato_id))
             contrato = result_contrato.scalars().first()
             
@@ -31,14 +30,14 @@ async def procesar_auditoria_background(auditoria_id: int, contrato_id: int):
             )
             clausulas = result_clausulas.scalars().all()
 
-            # 2. Ejecutar análisis concurrente con IA
+            
             tareas_ia = [analizar_clausula_con_ia(c.numero, c.titulo, c.texto) for c in clausulas]
             resultados_ia = await asyncio.gather(*tareas_ia)
             
             puntos_riesgo = 0
             todos_los_hallazgos = []
 
-            # 3. Procesar y guardar hallazgos
+            
             for clausula, resultado in zip(clausulas, resultados_ia):
                 for h in resultado["hallazgos"]:
                     hallazgo_bd = db_models.Hallazgo(
@@ -56,7 +55,7 @@ async def procesar_auditoria_background(auditoria_id: int, contrato_id: int):
                     elif h["nivel_riesgo"] == "Medio": puntos_riesgo += 15
                     else: puntos_riesgo += 5
 
-            # 4. Actualizar estado de la auditoría y contrato
+            
             result_auditoria = await db.execute(select(db_models.Auditoria).where(db_models.Auditoria.id == auditoria_id))
             auditoria = result_auditoria.scalars().first()
             
@@ -71,7 +70,7 @@ async def procesar_auditoria_background(auditoria_id: int, contrato_id: int):
             await db.commit()
 
         except Exception as e:
-            # En caso de error, registrar en la base de datos
+            
             print(f"Error procesando auditoría {auditoria_id}: {str(e)}")
             result_auditoria = await db.execute(select(db_models.Auditoria).where(db_models.Auditoria.id == auditoria_id))
             auditoria = result_auditoria.scalars().first()
@@ -80,19 +79,17 @@ async def procesar_auditoria_background(auditoria_id: int, contrato_id: int):
                 await db.commit()
 
 
-# ==========================================
-# ENDPOINTS
-# ==========================================
+
 
 @router.post("/{contrato_id}/analizar", status_code=status.HTTP_202_ACCEPTED)
 async def ejecutar_auditoria_contrato(
     contrato_id: int,
-    background_tasks: BackgroundTasks, # <-- Inyectamos el manejador de tareas
+    background_tasks: BackgroundTasks, 
     db: AsyncSession = Depends(get_db),
     current_user: db_models.Usuario = Depends(get_current_user)
 ):
     """Inicia el análisis de IA en segundo plano y retorna una respuesta inmediatamente."""
-    # Validación del contrato
+    
     result_contrato = await db.execute(
         select(db_models.Contrato).where(
             db_models.Contrato.id == contrato_id,
@@ -104,21 +101,19 @@ async def ejecutar_auditoria_contrato(
     if not contrato:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contrato no encontrado o acceso denegado.")
 
-    # Validación de cláusulas
+    
     result_clausulas = await db.execute(select(db_models.Clausula.id).where(db_models.Clausula.contrato_id == contrato_id))
     if not result_clausulas.scalars().first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El contrato no tiene cláusulas segmentadas.")
 
-    # Crear la auditoría con estado "en_proceso"
+    
     nueva_auditoria = db_models.Auditoria(contrato_id=contrato.id, estado="en_proceso", puntaje_riesgo=0.0)
     db.add(nueva_auditoria)
     await db.commit()
     await db.refresh(nueva_auditoria)
 
-    # Delegar el trabajo pesado a la función en segundo plano
     background_tasks.add_task(procesar_auditoria_background, nueva_auditoria.id, contrato.id)
 
-    # Responder al instante al cliente
     return {
         "mensaje": "El análisis ha comenzado en segundo plano.",
         "auditoria_id": nueva_auditoria.id,

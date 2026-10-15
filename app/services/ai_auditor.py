@@ -3,9 +3,6 @@ import os
 from typing import Dict, Any, List
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
-# ----------------------------------------------------------------------
-# Configuración del Cliente LLM (Azure OpenAI u OpenAI)
-# ----------------------------------------------------------------------
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
@@ -22,9 +19,6 @@ elif os.getenv("OPENAI_API_KEY"):
     client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-# ----------------------------------------------------------------------
-# Función Principal de Análisis
-# ----------------------------------------------------------------------
 async def analizar_clausula_con_ia(numero: str, titulo: str, texto: str) -> Dict[str, Any]:
   
     if client:
@@ -69,19 +63,16 @@ async def analizar_clausula_con_ia(numero: str, titulo: str, texto: str) -> Dict
         except Exception as e:
             print(f"[AI Auditor Warning] Error al invocar el servicio LLM: {e}. Usando fallback heurístico.")
 
-    # Resguardo heurístico cuando no hay credenciales de IA o falla el LLM
     return _analizar_clausula_heuristico(numero, titulo, texto)
 
 
-# ----------------------------------------------------------------------
-# Fallback Heurístico (Reglas Estáticas de Resguardo)
-# ----------------------------------------------------------------------
+
 def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[str, Any]:
     """Análisis estático ampliado basado en patrones de palabras clave."""
     texto_lower = texto.lower()
     hallazgos = []
 
-    # 1. Penalizaciones, Multas e Intereses
+   
     if any(w in texto_lower for w in ["penalización", "multa", "sanción", "interés moratorio", "intereses moratorios", "pena convencional"]):
         hallazgos.append({
             "tipo": "Riesgo Financiero / Penalización",
@@ -90,7 +81,6 @@ def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[
             "sugerencia_mejora": "Revisar los topes porcentuales de penalización y verificar la proporcionalidad legal."
         })
 
-    # 2. Confidencialidad y Propiedad Intelectual
     if any(w in texto_lower for w in ["confidencialidad", "secreto", "nda", "propiedad intelectual", "derechos de autor"]):
         hallazgos.append({
             "tipo": "Confidencialidad y PI",
@@ -99,7 +89,6 @@ def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[
             "sugerencia_mejora": "Asegurar un plazo razonable post-terminación y delimitar qué información se considera confidencial."
         })
 
-    # 3. Rescisión y Terminación Anticipada
     if any(w in texto_lower for w in ["rescisión", "terminación anticipada", "vencimiento", "resolución", "cancelación"]):
         hallazgos.append({
             "tipo": "Terminación Contractual",
@@ -108,7 +97,6 @@ def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[
             "sugerencia_mejora": "Asegurar plazos razonables de notificación previa por escrito (ej. 30 días) para ambas partes."
         })
 
-    # 4. Ley Aplicable y Jurisdicción
     if any(w in texto_lower for w in ["jurisdicción", "tribunales", "competencia", "ley aplicable", "arbitraje"]):
         hallazgos.append({
             "tipo": "Jurisdicción y Ley Aplicable",
@@ -117,7 +105,6 @@ def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[
             "sugerencia_mejora": "Confirmar que la ubicación de los tribunales designados resulte conveniente y accesible."
         })
 
-    # 5. Detección de Contenido Técnico u Horas de Diagnóstico
     if any(w in texto_lower for w in ["evaluación", "desarrollador", "reactivos", "sql", "programación", "examen"]):
         hallazgos.append({
             "tipo": "Validación de Contenido",
@@ -132,9 +119,6 @@ def _analizar_clausula_heuristico(numero: str, titulo: str, texto: str) -> Dict[
     }
 
 
-# ----------------------------------------------------------------------
-# Generación de Resumen Ejecutivo Global
-# ----------------------------------------------------------------------
 async def generar_resumen_ejecutivo(hallazgos_totales: List[Dict[str, Any]], puntaje_riesgo: float) -> str:
     """Genera un diagnóstico global consolidado sobre el estado del contrato."""
     if client:
@@ -158,7 +142,6 @@ async def generar_resumen_ejecutivo(hallazgos_totales: List[Dict[str, Any]], pun
         except Exception as e:
             print(f"[AI Auditor Warning] No se pudo generar el resumen ejecutivo con IA: {e}")
 
-    # Diagnóstico sintético de resguardo
     num_hallazgos = len(hallazgos_totales)
     if puntaje_riesgo >= 70:
         nivel = "ALTO"
@@ -172,9 +155,6 @@ async def generar_resumen_ejecutivo(hallazgos_totales: List[Dict[str, Any]], pun
 
     return f"Auditoría completada. Nivel de riesgo general: {nivel} (Puntaje: {puntaje_riesgo:.1f}/100). Total de hallazgos registrados: {num_hallazgos}. {rec}" 
 
-# ----------------------------------------------------------------------
-# Función de Asistente Conversacional RAG (Chat sobre el Contrato)
-# ----------------------------------------------------------------------
 async def consultar_contrato_rag(pregunta: str, contexto_clausulas: str) -> tuple[str, list[str]]:
     """
     Procesa consultas del usuario utilizando las cláusulas del contrato como contexto exclusivo.
@@ -205,7 +185,6 @@ async def consultar_contrato_rag(pregunta: str, contexto_clausulas: str) -> tupl
         
         respuesta_ia = response.choices[0].message.content.strip()
         
-        # Lista opcional de referencias (puedes poblarla dinámicamente si lo deseas)
         clausulas_citadas = []
         
         return respuesta_ia, clausulas_citadas

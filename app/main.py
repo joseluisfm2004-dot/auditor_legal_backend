@@ -14,7 +14,6 @@ from app.api.routes_auditoria import router as auditoria_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Evento de inicio: Crea las tablas que no existan en SQL Server
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -29,13 +28,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Puerto por defecto de Vite
+    allow_origins=["http://localhost:5173"], 
     allow_credentials=True,
-    allow_methods=["*"], # Permite GET, POST, PUT, DELETE, etc.
-    allow_headers=["*"], # Permite todos los headers (como Authorization para el token JWT)
+    allow_methods=["*"], 
+    allow_headers=["*"], 
 )
 
-# Registro de Routers con prefijos y etiquetas para Swagger
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(usuarios_router, prefix="/api/v1/usuarios", tags=["Usuarios"])
 app.include_router(contratos_router, prefix="/api/v1/contratos", tags=["Contratos"])

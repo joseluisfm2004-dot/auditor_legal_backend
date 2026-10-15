@@ -30,7 +30,6 @@ async def create_usuario(user: UsuarioCreate, db: AsyncSession = Depends(get_db)
         rol=user.rol
     )
 
-    # 4. Guardar en base de datos
     db.add(nuevo_usuario)
     try:
         await db.commit()

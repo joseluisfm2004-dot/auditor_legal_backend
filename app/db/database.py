@@ -13,20 +13,16 @@ DATABASE_URL = os.getenv(
     "mssql+aioodbc://localhost/auditoria_legal_db?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes"
 )
 
-# Crear el motor asíncrono
 engine = create_async_engine(DATABASE_URL, echo=True)
 
-# Configurar la fábrica de sesiones asíncronas
 AsyncSessionLocal = async_sessionmaker(
     bind=engine, 
     class_=AsyncSession, 
     expire_on_commit=False
 )
 
-# Base para los modelos de SQLAlchemy
 Base = declarative_base()
 
-# Dependencia para inyectar la sesión en los endpoints de FastAPI
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session

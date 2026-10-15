@@ -3,17 +3,13 @@ venv/
 .venv/
 env/
 
-# Archivos de configuración y variables de entorno
 .env
 
-# Archivos compilados de Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Configuración local de VS Code
 .vscode/
 
-# Archivos de almacenamiento local
 uploads/

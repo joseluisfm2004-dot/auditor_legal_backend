@@ -15,7 +15,6 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Usamos db_models.Usuario en lugar de Usuario directo
     result = await db.execute(select(db_models.Usuario).where(db_models.Usuario.email == form_data.username))
     usuario = result.scalars().first()
 

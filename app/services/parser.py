@@ -7,10 +7,8 @@ def segmentar_texto_en_clausulas(texto: str) -> List[Dict[str, str]]:
     if not texto:
         return []
 
-    # Patrón Regex enfocado exclusivamente en apartados y cláusulas jurídicas
     patron_clausula = r'(?i)(?=(?:^|\n)\s*(?:CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?))'
 
-    # Dividir el texto en bloques
     bloques = re.split(patron_clausula, texto)
     clausulas_procesadas = []
 
@@ -26,7 +24,6 @@ def segmentar_texto_en_clausulas(texto: str) -> List[Dict[str, str]]:
         numero = None
         titulo = None
 
-        # Identificar la denominación de la cláusula en la primera línea del bloque
         coincidencia_num = re.search(
             r'(?i)(CLÁUSULA\s+(?:[A-ZÁÉÍÓÚ0-9]+|[I|V|X]+)|SECCIÓN\s+[0-9]+|DECLARACIO(?:N|NES)|CONSIDERANDOS|ANTECEDENTES|(?:DÉCIMA|DECIMA|NOVENA|OCTAVA|SÉPTIMA|SEPTIMA|SEXTA|QUINTA|CUARTA|TERCERA|SEGUNDA|PRIMERA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|SEPTIMA|OCTAVA|NOVENA))?)',
             primera_linea

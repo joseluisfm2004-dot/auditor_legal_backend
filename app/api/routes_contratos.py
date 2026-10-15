@@ -111,10 +111,8 @@ async def procesar_extraer_texto(
             detail="Contrato no encontrado."
         )
 
-    # 2. Extraer el texto usando el servicio extractor
     texto_completo = extraer_texto_documento(contrato.ruta_archivo)
 
-    # 3. Cambiar estado a 'procesando'
     contrato.estado = "procesando"
     await db.commit()
 
@@ -135,7 +133,6 @@ async def segmentar_y_guardar_clausulas(
 ):
     """Extrae el texto del contrato, lo segmenta en cláusulas y las guarda en SQL Server."""
     
-    # 1. Buscar contrato y validar propiedad
     result = await db.execute(
         select(db_models.Contrato).where(
             db_models.Contrato.id == contrato_id,
@@ -150,10 +147,8 @@ async def segmentar_y_guardar_clausulas(
             detail="Contrato no encontrado."
         )
 
-    # 2. Extraer texto crudo
     texto_completo = extraer_texto_documento(contrato.ruta_archivo)
 
-    # 3. Parsear texto en cláusulas
     clausulas_dict = segmentar_texto_en_clausulas(texto_completo)
 
     if not clausulas_dict:
@@ -162,7 +157,6 @@ async def segmentar_y_guardar_clausulas(
             detail="No se pudieron identificar cláusulas estructuradas en el documento."
         )
 
-    # 4. Crear los objetos de BD e insertarlos
     nuevas_clausulas = []
     for item in clausulas_dict:
         clausula_bd = db_models.Clausula(
@@ -177,7 +171,6 @@ async def segmentar_y_guardar_clausulas(
     db.add_all(nuevas_clausulas)
     await db.commit()
 
-    # Retornar las cláusulas creadas
     result_clausulas = await db.execute(
         select(db_models.Clausula)
         .where(db_models.Clausula.contrato_id == contrato.id)
@@ -194,7 +187,6 @@ async def auditar_contrato(
 ):
     """Ejecuta el motor de auditoría inteligente (con IA o heurístico) sobre las cláusulas del contrato."""
     
-    # 1. Buscar el contrato y validar que pertenezca al usuario
     result = await db.execute(
         select(db_models.Contrato).where(
             db_models.Contrato.id == contrato_id,
@@ -209,7 +201,6 @@ async def auditar_contrato(
             detail="Contrato no encontrado."
         )
 
-    # 2. Obtener las cláusulas asociadas al contrato
     result_clausulas = await db.execute(
         select(db_models.Clausula).where(db_models.Clausula.contrato_id == contrato.id)
     )
@@ -224,7 +215,6 @@ async def auditar_contrato(
     hallazgos_totales = []
     peso_riesgo_total = 0
 
-    # 3. Analizar cada cláusula con el motor inteligente
     for c in clausulas:
         resultado = await analizar_clausula_con_ia(c.numero, c.titulo, c.texto)
         
@@ -244,13 +234,10 @@ async def auditar_contrato(
                 **h
             })
 
-    # Calcular puntaje normalizado de 0 a 100
     puntaje_riesgo = min(float(peso_riesgo_total), 100.0)
 
-    # 4. Generar el resumen ejecutivo global
     resumen_global = await generar_resumen_ejecutivo(hallazgos_totales, puntaje_riesgo)
 
-    # 5. Actualizar estado del contrato en la base de datos
     contrato.estado = "auditado"
     await db.commit()
 
@@ -262,9 +249,6 @@ async def auditar_contrato(
         "hallazgos": hallazgos_totales
     }
 
-# ==========================================
-# NUEVO: Endpoint para obtener el historial
-# ==========================================
 @router.get("/{contrato_id}/chat/historial", response_model=SesionChatResponse)
 async def obtener_historial_chat(
     contrato_id: int, 
@@ -272,7 +256,6 @@ async def obtener_historial_chat(
     current_user: db_models.Usuario = Depends(get_current_user)
 ):
     """Obtiene el historial de chat de un contrato guardado en SQL Server."""
-    # Usamos selectinload para traer los mensajes asociados a la sesión asíncronamente
     result = await db.execute(
         select(db_models.SesionChat)
         .options(selectinload(db_models.SesionChat.mensajes))
@@ -284,14 +267,11 @@ async def obtener_historial_chat(
     sesion = result.scalars().first()
 
     if not sesion:
-        # Si no existe, devolvemos una estructura vacía para que el Frontend no falle
         return {"id": 0, "contrato_id": contrato_id, "mensajes": []}
     
     return sesion
 
-# ==========================================
-# ACTUALIZADO: Endpoint para chatear y guardar historial
-# ==========================================
+
 @router.post("/{contrato_id}/chat", response_model=ChatResponseSchema)
 async def chat_con_contrato(
     contrato_id: int,
@@ -301,7 +281,6 @@ async def chat_con_contrato(
 ):
     """Endpoint de interacción conversacional RAG que guarda historial."""
     
-    # 1. Validar propiedad y existencia del contrato
     result = await db.execute(
         select(db_models.Contrato).where(
             db_models.Contrato.id == contrato_id,
@@ -316,7 +295,6 @@ async def chat_con_contrato(
             detail="Contrato no encontrado."
         )
 
-    # 2. Recuperar las cláusulas almacenadas como contexto
     result_clausulas = await db.execute(
         select(db_models.Clausula)
         .where(db_models.Clausula.contrato_id == contrato_id)
@@ -330,8 +308,6 @@ async def chat_con_contrato(
             detail="El contrato debe ser segmentado antes de iniciar el asistente conversacional."
         )
 
-    # --- INICIO LÓGICA DE HISTORIAL ---
-    # 3. Buscar si ya existe una sesión de chat, sino crearla
     result_sesion = await db.execute(
         select(db_models.SesionChat).where(
             db_models.SesionChat.contrato_id == contrato_id,
@@ -346,7 +322,6 @@ async def chat_con_contrato(
         await db.commit()
         await db.refresh(sesion)
 
-    # 4. Guardar la pregunta del usuario
     mensaje_usuario = db_models.MensajeChat(
         sesion_id=sesion.id,
         rol_emisor="user",
@@ -354,19 +329,15 @@ async def chat_con_contrato(
     )
     db.add(mensaje_usuario)
     await db.commit()
-    # --- FIN LÓGICA DE HISTORIAL ---
 
-    # 5. Construir el contexto unificado de texto (Corregido el error de sintaxis)
     contexto_texto = "\n\n".join([f"[Cláusula {c.numero} - {c.titulo}]: {c.texto}" for c in clausulas])
 
-    # 6. Invocar el servicio de IA con patrón RAG
     respuesta_ia, referencias = await consultar_contrato_rag(
         pregunta=payload.pregunta,
         contexto_clausulas=contexto_texto
     )
 
-    # --- INICIO LÓGICA DE HISTORIAL ---
-    # 7. Guardar la respuesta de la IA
+
     mensaje_ia = db_models.MensajeChat(
         sesion_id=sesion.id,
         rol_emisor="ia",
@@ -374,7 +345,6 @@ async def chat_con_contrato(
     )
     db.add(mensaje_ia)
     await db.commit()
-    # --- FIN LÓGICA DE HISTORIAL ---
 
     return ChatResponseSchema(
         respuesta=respuesta_ia,
